@@ -1,6 +1,8 @@
 import {
 	mapDataToInternalFormat,
 	createPullRequestsQuery,
+	createMyPullRequestsQuery,
+	MY_PULL_REQUEST_RELATIONSHIPS,
 	transferUserStatus,
 	autoRemoveRepo,
 } from './index.js';
@@ -57,9 +59,11 @@ export async function fetchData() {
 		// Save and distribute
 		quickStorage.setRepositories(repositories);
 		quickStorage.setRateLimit(rateLimit);
+		const errors = apiErrors.get();
 		sendToAllTabs({
 			repositories,
 			rateLimit,
+			...(errors.length > 0 ? { errors } : {}),
 			loading: false,
 		});
 	} catch (err) {
@@ -76,77 +80,184 @@ export async function fetchData() {
 	}
 }
 
-function fetchDataFromAPI({ token, repos, numberOfItems, sortBy }) {
-	return new Promise((resolve, reject) => {
-		if (!numberOfItems) {
-			return reject();
+function normalizeGraphQLErrors(
+	errors,
+	{ autoRemoveMissingRepo = false } = {},
+) {
+	return errors.map((item) => {
+		if (autoRemoveMissingRepo && item.type === 'NOT_FOUND') {
+			// Repos are named 'repo{number}' in graphql-kalls
+			const missingRepoNumber = Number(item.path[0].replace('repo', ''));
+
+			autoRemoveRepo(missingRepoNumber);
+
+			return {
+				title: 'Error in API query to Github',
+				message: `${item.message}: Will now autoremove repo from list.`,
+				time: Date.now(),
+			};
 		}
 
-		const query = createPullRequestsQuery(repos, numberOfItems, sortBy);
-
-		fetch('https://api.github.com/graphql', {
-			method: 'post',
-			headers: {
-				Authorization: `Bearer ${token}`,
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({ query }),
-		})
-			.then((res) => res.json())
-			.then((result) => {
-				if (result.errors) {
-					const userError = result.errors.map((item) => {
-						if (item.type === 'NOT_FOUND') {
-							// Repos are named 'repo{number}' in graphql-kalls
-							const missingRepoNumber = Number(
-								item.path[0].replace('repo', ''),
-							);
-
-							autoRemoveRepo(missingRepoNumber);
-
-							return {
-								title: 'Error in API query to Github',
-								message: `${item.message}: Will now autoremove repo from list.`,
-								time: Date.now(),
-							};
-						}
-
-						return {
-							title: 'Error in API query to Github',
-							message: item.message,
-							time: Date.now(),
-						};
-					});
-
-					return reject(userError);
-				} else if (!result.data) {
-					return reject([
-						{
-							title: 'Could not reach Githubs API at this moment',
-							message: result.message || 'Unknown error',
-							time: Date.now(),
-						},
-					]);
-				}
-
-				return resolve(result.data);
-			})
-			.catch((error) => {
-				// If we dont have a error resonse, its probably a network error.
-				// We dont want to flood users with network errors
-				if (!error.response) {
-					return reject();
-				}
-
-				const userError = [
-					{
-						title: error.message,
-						message: error.response.data.message,
-						time: Date.now(),
-					},
-				];
-
-				return reject(userError);
-			});
+		return {
+			title: 'Error in API query to Github',
+			message: item.message,
+			time: Date.now(),
+		};
 	});
+}
+
+async function fetchGraphQL(token, query, options = {}) {
+	const res = await fetch('https://api.github.com/graphql', {
+		method: 'post',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ query }),
+	});
+
+	const result = await res.json();
+	if (result.errors) {
+		throw normalizeGraphQLErrors(result.errors, options);
+	}
+	if (!result.data) {
+		throw [
+			{
+				title: 'Could not reach Githubs API at this moment',
+				message: result.message || 'Unknown error',
+				time: Date.now(),
+			},
+		];
+	}
+
+	return result.data;
+}
+
+function createRepoUrl({ owner, name }) {
+	return `https://github.com/${owner}/${name}`;
+}
+
+function getRepoUrlFromPullRequest(node) {
+	const match = node.url.match(
+		/^(https:\/\/github\.com\/[^/]+\/[^/]+)\/pull\/\d+/,
+	);
+	return match ? match[1] : null;
+}
+
+async function fetchMyPullRequestsFromAPI({ token, repos }) {
+	const resultsByRepo = repos.reduce((result, repo) => {
+		result[createRepoUrl(repo)] = [];
+		return result;
+	}, {});
+
+	for (const repo of repos) {
+		const dedupedByRepo = {};
+
+		for (const relationship of MY_PULL_REQUEST_RELATIONSHIPS) {
+			let afterCursor = null;
+			let hasNextPage = true;
+
+			while (hasNextPage) {
+				const data = await fetchGraphQL(
+					token,
+					createMyPullRequestsQuery(repo, relationship, afterCursor),
+				);
+				const searchData = data.search || {};
+				const { nodes = [], pageInfo = {} } = searchData;
+
+				nodes.filter(Boolean).forEach((node) => {
+					const repoUrl =
+						getRepoUrlFromPullRequest(node) || createRepoUrl(repo);
+					dedupedByRepo[repoUrl] = dedupedByRepo[repoUrl] || {};
+					dedupedByRepo[repoUrl][node.id] = node;
+				});
+
+				hasNextPage = pageInfo.hasNextPage || false;
+				afterCursor = pageInfo.endCursor;
+			}
+		}
+
+		Object.entries(dedupedByRepo).forEach(([repoUrl, pullRequestsById]) => {
+			const existingPullRequests = resultsByRepo[repoUrl] || [];
+			const mergedPullRequests = existingPullRequests.reduce((merged, item) => {
+				merged[item.id] = item;
+				return merged;
+			}, {});
+
+			Object.values(pullRequestsById).forEach((item) => {
+				mergedPullRequests[item.id] = item;
+			});
+
+			resultsByRepo[repoUrl] = Object.values(mergedPullRequests);
+		});
+	}
+
+	return resultsByRepo;
+}
+
+async function fetchDataFromAPI({ token, repos, numberOfItems, sortBy }) {
+	if (!numberOfItems) {
+		return Promise.reject();
+	}
+
+	const query = createPullRequestsQuery(repos, numberOfItems, sortBy);
+
+	try {
+		const data = await fetchGraphQL(token, query, {
+			autoRemoveMissingRepo: true,
+		});
+		let myPullRequestsByRepo = {};
+		try {
+			myPullRequestsByRepo = await fetchMyPullRequestsFromAPI({
+				token,
+				repos,
+			});
+		} catch (error) {
+			storePersonalPullRequestError(error);
+		}
+
+		return {
+			...data,
+			myPullRequestsByRepo,
+		};
+	} catch (error) {
+		// If we dont have a error resonse, its probably a network error.
+		// We dont want to flood users with network errors
+		if (!error.response) {
+			if (Array.isArray(error)) {
+				return Promise.reject(error);
+			}
+
+			return Promise.reject();
+		}
+
+		const userError = [
+			{
+				title: error.message,
+				message: error.response.data.message,
+				time: Date.now(),
+			},
+		];
+
+		return Promise.reject(userError);
+	}
+}
+
+function storePersonalPullRequestError(error) {
+	if (Array.isArray(error)) {
+		apiErrors.push(error);
+		return;
+	}
+
+	if (!error.response) {
+		return;
+	}
+
+	apiErrors.push([
+		{
+			title: error.message,
+			message: error.response.data.message,
+			time: Date.now(),
+		},
+	]);
 }

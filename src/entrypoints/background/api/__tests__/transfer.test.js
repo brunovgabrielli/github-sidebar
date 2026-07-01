@@ -1,4 +1,5 @@
 import { transferUserStatus } from '../transfer.js';
+import { quickStorage } from '../../settings/';
 
 import {
 	createInternalRepositories,
@@ -75,5 +76,34 @@ describe('transferUserStatus', () => {
 		// just need to make sure nothing broke with data missing
 		expect(response[0].issues[0].read).toBe(true);
 		expect(response[0].issues[1].read).toBe(false);
+	});
+
+	it('should transfer personal pull request read status', async () => {
+		const storedRepos = await quickStorage.getRepositories();
+		storedRepos[0].myPullRequests = [{ id: 'myPullID', read: true }];
+		await quickStorage.setRepositories(storedRepos);
+
+		const firstRepo = createInternalRepositoryData({ read: false });
+		firstRepo.myPullRequests = [{ id: 'myPullID', read: false }];
+
+		const response = await transferUserStatus([firstRepo]);
+
+		expect(response[0].myPullRequests[0].read).toBe(true);
+	});
+
+	it('should transfer pull request read status across general and personal lists', async () => {
+		const storedRepos = await quickStorage.getRepositories();
+		storedRepos[0].pullRequests = [{ id: 'sharedPullID', read: true }];
+		storedRepos[0].myPullRequests = [];
+		await quickStorage.setRepositories(storedRepos);
+
+		const firstRepo = createInternalRepositoryData({ read: false });
+		firstRepo.pullRequests = [{ id: 'sharedPullID', read: false }];
+		firstRepo.myPullRequests = [{ id: 'sharedPullID', read: false }];
+
+		const response = await transferUserStatus([firstRepo]);
+
+		expect(response[0].pullRequests[0].read).toBe(true);
+		expect(response[0].myPullRequests[0].read).toBe(true);
 	});
 });

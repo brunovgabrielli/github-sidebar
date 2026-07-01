@@ -59,17 +59,30 @@ export default function Repository(props) {
 
 	const availableItems =
 		settings.listItemOfType === 'all'
-			? ['issues', 'pullRequests']
-			: [settings.listItemOfType];
+			? ['issues', 'myPullRequests', 'pullRequests']
+			: settings.listItemOfType === 'pullRequests'
+				? ['myPullRequests', 'pullRequests']
+				: [settings.listItemOfType];
 
 	const maxHeight = calculateMaxHeight(repo, repoHeight);
 
 	const hasActiveElements =
-		repo.totalItems.issues + repo.totalItems.pullRequests > 0;
+		repo.totalItems.issues +
+			(repo.myPullRequests?.length || 0) +
+			repo.totalItems.pullRequests >
+		0;
 
 	const items = availableItems.map((item) => {
-		const totalItems = repo.totalItems[item];
-		const typeText = item === 'pullRequests' ? 'pull requests' : item;
+		const totalItems =
+			item === 'myPullRequests'
+				? repo.myPullRequests?.length || 0
+				: repo.totalItems[item];
+		const typeText =
+			item === 'pullRequests'
+				? 'pull requests'
+				: item === 'myPullRequests'
+					? 'my pull requests'
+					: item;
 		return (
 			<span key={item} title={`${totalItems} ${typeText}`}>
 				{totalItems}

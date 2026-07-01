@@ -14,9 +14,11 @@ describe('hasUnreadItems', () => {
 		repositories[0].issues[0].read = true;
 		repositories[0].pullRequests[0].read = true;
 		repositories[0].pullRequests[1].read = true;
+		repositories[0].myPullRequests[0].read = true;
 		repositories[1].issues[0].read = true;
 		repositories[1].pullRequests[0].read = true;
 		repositories[1].pullRequests[1].read = true;
+		repositories[1].myPullRequests[0].read = true;
 
 		hasUnread = hasUnreadItems(repositories);
 		expect(hasUnread).toBe(false);
@@ -28,6 +30,7 @@ describe('repoHasUnreadItems', () => {
 		let repository = createInternalRepositoryData();
 		delete repository.issues;
 		delete repository.pullRequests;
+		delete repository.myPullRequests;
 		let hasUnread = repoHasUnreadItems(repository);
 
 		expect(hasUnread).toBe(false);
@@ -55,8 +58,20 @@ describe('repoHasUnreadItems', () => {
 		repository.issues[0].read = true;
 		repository.pullRequests[0].read = true;
 		repository.pullRequests[1].read = true;
+		repository.myPullRequests[0].read = true;
 		let hasUnread = repoHasUnreadItems(repository);
 
 		expect(hasUnread).toBe(false);
+	});
+
+	it('should search through personal pull requests', () => {
+		let repository = createInternalRepositoryData();
+		repository.issues[0].read = true;
+		repository.pullRequests[0].read = true;
+		repository.pullRequests[1].read = true;
+		repository.myPullRequests = [{ id: 'myPullID', read: false }];
+		let hasUnread = repoHasUnreadItems(repository);
+
+		expect(hasUnread).toBe(true);
 	});
 });

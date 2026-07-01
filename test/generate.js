@@ -41,12 +41,60 @@ export function createRepoURL(options = {}) {
 	return `https://github.com/${userName}/${repoName}${subPath}`;
 }
 
+export function createExternalPullRequestNode({
+	id = 'myPullID',
+	title = 'My Pull title 1',
+	url = createRepoURL({ subPath: '/pull/22' }),
+	author = defaultUserName,
+	comments = 5,
+	reviewStatus = 'CHANGES_REQUESTED',
+	createdAt = date,
+	updatedAt = date,
+	number = 22,
+} = {}) {
+	return {
+		id,
+		title,
+		url,
+		updatedAt,
+		createdAt,
+		number,
+		author: {
+			login: author,
+		},
+		reviews: {
+			nodes: reviewStatus ? [{ state: reviewStatus }] : [],
+		},
+		comments: {
+			totalCount: comments,
+		},
+	};
+}
+
+export function createExternalMyPullRequestsResponse({
+	hasNextPage = false,
+	endCursor = null,
+	nodes = [createExternalPullRequestNode()],
+} = {}) {
+	return {
+		data: {
+			search: {
+				pageInfo: {
+					hasNextPage,
+					endCursor,
+				},
+				nodes,
+			},
+		},
+	};
+}
+
 export function mockFetchReject(data) {
 	global.fetch = vi.fn().mockImplementationOnce(() => Promise.reject(data));
 }
 
 export function mockFetchResolve(data) {
-	global.fetch = vi.fn().mockImplementationOnce(() =>
+	global.fetch = vi.fn().mockImplementation(() =>
 		Promise.resolve({
 			json: () => Promise.resolve(data),
 		}),
@@ -260,6 +308,23 @@ export function createInternalRepositoryData(options) {
 					userName: login,
 					repoName,
 					subPath: '/issues/1',
+				}),
+			},
+		],
+		myPullRequests: [
+			{
+				author: login,
+				comments: 5,
+				createdAt: date,
+				id: 'myPullID',
+				read,
+				reviewStatus: null,
+				title: 'My Pull title 1',
+				updatedAt: date,
+				url: createRepoURL({
+					userName: login,
+					repoName,
+					subPath: '/pull/22',
 				}),
 			},
 		],

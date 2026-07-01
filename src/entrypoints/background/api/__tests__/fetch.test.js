@@ -17,6 +17,8 @@ import {
 	mockFetchResolve,
 	defaultRepoName,
 	createExternalRespositories,
+	createExternalMyPullRequestsResponse,
+	createExternalPullRequestNode,
 	createRepoURL,
 } from '../../../../../test/generate.js';
 import { setupBackgroundTests } from '../../../../../test/setup.js';
@@ -51,8 +53,15 @@ describe('fetchData', () => {
 		// Make sure repositories and rateLimit have been set
 		expect(chrome.storage.local.set).toHaveBeenCalledTimes(2);
 
+		const expectedRepositories = createRepositoryData().internal.map(
+			(repo) => ({
+				...repo,
+				myPullRequests: [],
+			}),
+		);
+
 		expect(sendToAllTabs).toHaveBeenNthCalledWith(2, {
-			repositories: createRepositoryData().internal,
+			repositories: expectedRepositories,
 			rateLimit: createRateLimit(),
 			loading: false,
 		});
@@ -190,6 +199,7 @@ describe('fetchData', () => {
 		expect(firstRepo.collapsed).toBeTruthy();
 		expect(firstRepo.totalItems.issues).toBe(1);
 		expect(firstRepo.totalItems.pullRequests).toBe(2);
+		expect(firstRepo.myPullRequests).toEqual([]);
 
 		expect(firstRepo.issues).toMatchInlineSnapshot(`
 			[
@@ -390,13 +400,118 @@ describe('fetchData', () => {
 		expect(repository.pullRequests[0].read).toBe(true);
 		expect(repository.pullRequests[1].read).toBe(true);
 	});
+
+	it('should fetch personal pull requests for each repo and relationship', async () => {
+		const mainResponse = createExternalRespositories();
+		const personalResponse = createExternalMyPullRequestsResponse();
+		global.fetch = vi
+			.fn()
+			.mockResolvedValueOnce({ json: () => Promise.resolve(mainResponse) })
+			.mockResolvedValue({ json: () => Promise.resolve(personalResponse) });
+
+		await fetchData();
+
+		expect(global.fetch).toHaveBeenCalledTimes(
+			1 + createSettings().repos.length * 3,
+		);
+		const repositories = sendToAllTabs.mock.calls[1][0].repositories;
+		expect(repositories[0].myPullRequests).toHaveLength(1);
+		expect(repositories[0].myPullRequests[0].id).toBe('myPullID');
+	});
+
+	it('should fetch the next personal pull request page when search has more pages', async () => {
+		const mainResponse = createExternalRespositories(1);
+		const firstPage = createExternalMyPullRequestsResponse({
+			hasNextPage: true,
+			endCursor: 'cursor-1',
+			nodes: [createExternalPullRequestNode({ id: 'myPullID' })],
+		});
+		const secondPage = createExternalMyPullRequestsResponse({
+			nodes: [createExternalPullRequestNode({ id: 'myPullID_2' })],
+		});
+		global.fetch = vi
+			.fn()
+			.mockResolvedValueOnce({ json: () => Promise.resolve(mainResponse) })
+			.mockResolvedValueOnce({ json: () => Promise.resolve(firstPage) })
+			.mockResolvedValue({ json: () => Promise.resolve(secondPage) });
+
+		await fetchData();
+
+		const repositories = sendToAllTabs.mock.calls[1][0].repositories;
+		expect(repositories[0].myPullRequests.map((item) => item.id)).toEqual([
+			'myPullID',
+			'myPullID_2',
+		]);
+	});
+
+	it('should map personal pull requests into each repository', async () => {
+		const mainResponse = createExternalRespositories(1);
+		const personalResponse = createExternalMyPullRequestsResponse({
+			nodes: [
+				createExternalPullRequestNode({
+					id: 'myPullID',
+					title: 'My assigned PR',
+					author: 'anotherAuthor',
+					reviewStatus: null,
+				}),
+			],
+		});
+		global.fetch = vi
+			.fn()
+			.mockResolvedValueOnce({ json: () => Promise.resolve(mainResponse) })
+			.mockResolvedValue({ json: () => Promise.resolve(personalResponse) });
+
+		await fetchData();
+
+		expect(
+			sendToAllTabs.mock.calls[1][0].repositories[0].myPullRequests,
+		).toEqual([
+			{
+				author: 'anotherAuthor',
+				comments: 5,
+				createdAt: '2021-01-01T01:02:03Z',
+				id: 'myPullID',
+				read: false,
+				reviewStatus: null,
+				title: 'My assigned PR',
+				updatedAt: '2021-01-01T01:02:03Z',
+				url: 'https://github.com/githubusername/github-sidebar/pull/22',
+			},
+		]);
+	});
+
+	it('should keep general repository data if personal pull request fetch fails', async () => {
+		const mainResponse = createExternalRespositories(1);
+		global.fetch = vi
+			.fn()
+			.mockResolvedValueOnce({ json: () => Promise.resolve(mainResponse) })
+			.mockResolvedValueOnce({
+				json: () =>
+					Promise.resolve({
+						errors: [{ message: 'Personal pull request search failed' }],
+					}),
+			});
+
+		await fetchData();
+
+		const update = sendToAllTabs.mock.calls[1][0];
+		expect(update.repositories[0].issues).toHaveLength(1);
+		expect(update.repositories[0].pullRequests).toHaveLength(2);
+		expect(update.repositories[0].myPullRequests).toEqual([]);
+		expect(update.errors[0].message).toBe(
+			'Personal pull request search failed',
+		);
+		expect(update.loading).toBe(false);
+	});
 });
 
 describe('fetching in fetchDataFromAPI', () => {
 	it('should call fetch with the querydata', async () => {
 		await fetchData();
 
-		expect(global.fetch).toHaveBeenCalledTimes(1);
+		expect(global.fetch).toHaveBeenCalledTimes(
+			1 + createSettings().repos.length * 3,
+		);
 		const { repos, numberOfItems, sortBy, token } = createSettings();
 		expect(global.fetch).toHaveBeenCalledWith(
 			'https://api.github.com/graphql',

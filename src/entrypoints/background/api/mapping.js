@@ -1,7 +1,7 @@
 import { quickStorage } from '../settings/';
 
 export async function mapDataToInternalFormat(data) {
-	const { viewer, ...repos } = data;
+	const { viewer, myPullRequestsByRepo = {}, ...repos } = data;
 
 	const repositories = await quickStorage.getRepositories();
 
@@ -20,8 +20,17 @@ export async function mapDataToInternalFormat(data) {
 			viewer,
 			oldTotalItemsNumber,
 		);
+		const myPullRequests = (myPullRequestsByRepo[repo.url] || []).map((item) =>
+			mapNodeToInternalItem(item, viewer, oldTotalItemsNumber),
+		);
 
-		return createRepoData(repo, issues, pullRequests, newTotalItemsNumber);
+		return createRepoData(
+			repo,
+			issues,
+			pullRequests,
+			myPullRequests,
+			newTotalItemsNumber,
+		);
 	});
 }
 
@@ -33,6 +42,7 @@ function createRepoData(
 	repo,
 	issues = [],
 	pullRequests = [],
+	myPullRequests = [],
 	newTotalItemsNumber,
 ) {
 	const name = repo.name;
@@ -49,27 +59,32 @@ function createRepoData(
 			pullRequests: repo.pullRequests?.totalCount,
 		},
 		issues,
+		myPullRequests,
 		pullRequests,
 	};
 }
 
 function listItems(element, { login }, totalItemNumber) {
-	return element.edges.map(({ node: item }) => {
-		return {
-			id: item.id,
-			title: item.title,
-			url: item.url,
-			reviewStatus:
-				item.reviews && item.reviews.nodes.length > 0
-					? item.reviews.nodes[0].state
-					: null,
-			updatedAt: item.updatedAt,
-			createdAt: item.createdAt,
-			comments: item.comments.totalCount,
-			read: setItemReadStatus(item, login, totalItemNumber),
-			author: item.author.login,
-		};
-	});
+	return element.edges.map(({ node: item }) =>
+		mapNodeToInternalItem(item, { login }, totalItemNumber),
+	);
+}
+
+function mapNodeToInternalItem(item, { login }, totalItemNumber) {
+	return {
+		id: item.id,
+		title: item.title,
+		url: item.url,
+		reviewStatus:
+			item.reviews && item.reviews.nodes.length > 0
+				? item.reviews.nodes[0].state
+				: null,
+		updatedAt: item.updatedAt,
+		createdAt: item.createdAt,
+		comments: item.comments.totalCount,
+		read: setItemReadStatus(item, login, totalItemNumber),
+		author: item.author.login,
+	};
 }
 
 function setItemReadStatus(item, login, totalItemNumber) {
