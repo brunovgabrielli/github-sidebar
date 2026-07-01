@@ -86,7 +86,7 @@ function normalizeGraphQLErrors(
 ) {
 	return errors.map((item) => {
 		if (autoRemoveMissingRepo && item.type === 'NOT_FOUND') {
-			// Repos are named 'repo{number}' in graphql-kalls
+			// Repos are named 'repo{number}' in GraphQL calls
 			const missingRepoNumber = Number(item.path[0].replace('repo', ''));
 
 			autoRemoveRepo(missingRepoNumber);
@@ -144,7 +144,19 @@ function getRepoUrlFromPullRequest(node) {
 	return match ? match[1] : null;
 }
 
-async function fetchMyPullRequestsFromAPI({ token, repos }) {
+function sortAndLimitPullRequests(pullRequests, numberOfItems, sortBy) {
+	const dateField = sortBy === 'UPDATED_AT' ? 'updatedAt' : 'createdAt';
+	return [...pullRequests]
+		.sort((a, b) => new Date(b[dateField]) - new Date(a[dateField]))
+		.slice(0, numberOfItems);
+}
+
+async function fetchMyPullRequestsFromAPI({
+	token,
+	repos,
+	numberOfItems,
+	sortBy,
+}) {
 	const resultsByRepo = repos.reduce((result, repo) => {
 		result[createRepoUrl(repo)] = [];
 		return result;
@@ -160,7 +172,12 @@ async function fetchMyPullRequestsFromAPI({ token, repos }) {
 			while (hasNextPage) {
 				const data = await fetchGraphQL(
 					token,
-					createMyPullRequestsQuery(repo, relationship, afterCursor),
+					createMyPullRequestsQuery(
+						repo,
+						relationship,
+						numberOfItems,
+						afterCursor,
+					),
 				);
 				const searchData = data.search || {};
 				const { nodes = [], pageInfo = {} } = searchData;
@@ -172,7 +189,10 @@ async function fetchMyPullRequestsFromAPI({ token, repos }) {
 					dedupedByRepo[repoUrl][node.id] = node;
 				});
 
-				hasNextPage = pageInfo.hasNextPage || false;
+				const repoUrl = createRepoUrl(repo);
+				const enoughItems =
+					Object.keys(dedupedByRepo[repoUrl] || {}).length >= numberOfItems;
+				hasNextPage = !enoughItems && (pageInfo.hasNextPage || false);
 				afterCursor = pageInfo.endCursor;
 			}
 		}
@@ -188,7 +208,11 @@ async function fetchMyPullRequestsFromAPI({ token, repos }) {
 				mergedPullRequests[item.id] = item;
 			});
 
-			resultsByRepo[repoUrl] = Object.values(mergedPullRequests);
+			resultsByRepo[repoUrl] = sortAndLimitPullRequests(
+				Object.values(mergedPullRequests),
+				numberOfItems,
+				sortBy,
+			);
 		});
 	}
 
@@ -211,6 +235,8 @@ async function fetchDataFromAPI({ token, repos, numberOfItems, sortBy }) {
 			myPullRequestsByRepo = await fetchMyPullRequestsFromAPI({
 				token,
 				repos,
+				numberOfItems,
+				sortBy,
 			});
 		} catch (error) {
 			storePersonalPullRequestError(error);

@@ -25,13 +25,14 @@ export const MY_PULL_REQUEST_RELATIONSHIPS = [
 export function createMyPullRequestsQuery(
 	repo,
 	relationship,
+	numberOfItems,
 	afterCursor = null,
 ) {
 	const after = afterCursor ? `"${afterCursor}"` : null;
 	const query = `repo:${repo.owner}/${repo.name} is:pr is:open ${relationship}:@me`;
 
 	return `query {
-            search(query: "${query}", type: ISSUE, first: 100, after: ${after}) {
+            search(query: "${query}", type: ISSUE, first: ${numberOfItems}, after: ${after}) {
               pageInfo {
                 hasNextPage
                 endCursor

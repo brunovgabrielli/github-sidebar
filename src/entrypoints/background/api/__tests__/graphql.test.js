@@ -296,19 +296,29 @@ describe('graphql', () => {
 
 	it('should create personal pull request search queries', () => {
 		const repo = { owner: 'githubusername', name: 'reponame' };
+		const numberOfItems = 4;
 
-		expect(createMyPullRequestsQuery(repo, 'author')).toContain(
+		expect(createMyPullRequestsQuery(repo, 'author', numberOfItems)).toContain(
 			'query: "repo:githubusername/reponame is:pr is:open author:@me"',
 		);
-		expect(createMyPullRequestsQuery(repo, 'assignee')).toContain(
+		expect(
+			createMyPullRequestsQuery(repo, 'assignee', numberOfItems),
+		).toContain(
 			'query: "repo:githubusername/reponame is:pr is:open assignee:@me"',
 		);
-		expect(createMyPullRequestsQuery(repo, 'review-requested')).toContain(
+		expect(
+			createMyPullRequestsQuery(repo, 'review-requested', numberOfItems),
+		).toContain(
 			'query: "repo:githubusername/reponame is:pr is:open review-requested:@me"',
 		);
-		expect(createMyPullRequestsQuery(repo, 'author')).toContain('after: null');
-		expect(createMyPullRequestsQuery(repo, 'author', 'abc123')).toContain(
-			'after: "abc123"',
+		expect(createMyPullRequestsQuery(repo, 'author', numberOfItems)).toContain(
+			'first: 4',
 		);
+		expect(createMyPullRequestsQuery(repo, 'author', numberOfItems)).toContain(
+			'after: null',
+		);
+		expect(
+			createMyPullRequestsQuery(repo, 'author', numberOfItems, 'abc123'),
+		).toContain('after: "abc123"');
 	});
 });

@@ -20,6 +20,7 @@ import {
 	createExternalMyPullRequestsResponse,
 	createExternalPullRequestNode,
 	createRepoURL,
+	defaultUserName,
 } from '../../../../../test/generate.js';
 import { setupBackgroundTests } from '../../../../../test/setup.js';
 
@@ -441,6 +442,47 @@ describe('fetchData', () => {
 		expect(repositories[0].myPullRequests.map((item) => item.id)).toEqual([
 			'myPullID',
 			'myPullID_2',
+		]);
+	});
+
+	it('should limit and sort personal pull requests by the users settings', async () => {
+		quickStorage.setSettings(
+			createSettings({
+				numberOfItems: 2,
+				sortBy: 'UPDATED_AT',
+				repos: [{ name: 'reponame', owner: defaultUserName }],
+			}),
+		);
+		const mainResponse = createExternalRespositories(1);
+		const personalResponse = createExternalMyPullRequestsResponse({
+			nodes: [
+				createExternalPullRequestNode({
+					id: 'oldPullID',
+					updatedAt: '2021-01-01T01:02:03Z',
+				}),
+				createExternalPullRequestNode({
+					id: 'newPullID',
+					updatedAt: '2021-01-03T01:02:03Z',
+				}),
+				createExternalPullRequestNode({
+					id: 'middlePullID',
+					updatedAt: '2021-01-02T01:02:03Z',
+				}),
+			],
+		});
+		global.fetch = vi
+			.fn()
+			.mockResolvedValueOnce({ json: () => Promise.resolve(mainResponse) })
+			.mockResolvedValue({ json: () => Promise.resolve(personalResponse) });
+
+		await fetchData();
+
+		const firstPersonalRequest = JSON.parse(global.fetch.mock.calls[1][1].body);
+		const repositories = sendToAllTabs.mock.calls[1][0].repositories;
+		expect(firstPersonalRequest.query).toContain('first: 2');
+		expect(repositories[0].myPullRequests.map((item) => item.id)).toEqual([
+			'newPullID',
+			'middlePullID',
 		]);
 	});
 
