@@ -149,8 +149,7 @@ export default function Settings({
 	const remaing =
 		token && rateLimit ? (
 			<em>
-				({rateLimit.remaining} requests left of {rateLimit.limit}. Resets in{' '}
-				{until(rateLimit.resetAt)})
+				{`(${rateLimit.remaining} requests left of ${rateLimit.limit}. Resets in ${until(rateLimit.resetAt)})`}
 			</em>
 		) : null;
 
@@ -263,7 +262,7 @@ export default function Settings({
 
 					<div className="credit">
 						<a href="https://github.com/christianeide/github-sidebar">
-							Github Sidebar {process.env.npm_package_version}
+							{`Github Sidebar ${process.env.npm_package_version}`}
 						</a>
 					</div>
 				</li>

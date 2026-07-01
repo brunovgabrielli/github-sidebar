@@ -32,7 +32,8 @@ export default function Item({
 		}
 		return (
 			<div className="comments">
-				<Icons icon="comment" /> {comments}
+				<Icons icon="comment" />
+				<span>{` ${comments}`}</span>
 			</div>
 		);
 	};
@@ -60,9 +61,7 @@ export default function Item({
 							{renderComments()}
 						</div>
 
-						<span className="bottom">
-							By {author}, {timeAgo}
-						</span>
+						<span className="bottom">{`By ${author}, ${timeAgo}`}</span>
 					</div>
 				</a>
 			</div>

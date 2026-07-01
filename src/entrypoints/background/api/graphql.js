@@ -16,6 +16,52 @@ export function createPullRequestsQuery(repositories, numberOfItems, sortBy) {
           }`;
 }
 
+export const MY_PULL_REQUEST_RELATIONSHIPS = [
+	'author',
+	'assignee',
+	'review-requested',
+];
+
+export function createMyPullRequestsQuery(
+	repo,
+	relationship,
+	numberOfItems,
+	afterCursor = null,
+) {
+	const after = afterCursor ? `"${afterCursor}"` : null;
+	const query = `repo:${repo.owner}/${repo.name} is:pr is:open ${relationship}:@me`;
+
+	return `query {
+            search(query: "${query}", type: ISSUE, first: ${numberOfItems}, after: ${after}) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                ... on PullRequest {
+                  id
+                  title
+                  url
+                  updatedAt
+                  createdAt
+                  number
+                  author {
+                    login
+                  }
+                  reviews(last: 1, states: [APPROVED, CHANGES_REQUESTED, DISMISSED]) {
+                    nodes {
+                      state
+                    }
+                  }
+                  comments {
+                    totalCount
+                  }
+                }
+              }
+            }
+          }`;
+}
+
 function repositoriesQuery({ owner, name }, numberOfItems, sortBy, index) {
 	return `repo${index}: repository(owner: "${owner}", name: "${name}") {
             name

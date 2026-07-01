@@ -21,16 +21,25 @@ export async function transferUserStatus(repositories) {
 		// Copy collapsed status
 		const collapsed = oldRepo.collapsed;
 
+		const oldPullRequestItems = [
+			...(oldRepo.pullRequests || []),
+			...(oldRepo.myPullRequests || []),
+		];
 		const issues = tranferReadStatusOfItem(newRepo.issues, oldRepo.issues);
+		const myPullRequests = tranferReadStatusOfItem(
+			newRepo.myPullRequests,
+			oldPullRequestItems,
+		);
 		const pullRequests = tranferReadStatusOfItem(
 			newRepo.pullRequests,
-			oldRepo.pullRequests,
+			oldPullRequestItems,
 		);
 
 		return {
 			...newRepo,
 			collapsed,
 			issues,
+			myPullRequests,
 			pullRequests,
 		};
 	});

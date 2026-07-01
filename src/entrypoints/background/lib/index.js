@@ -25,6 +25,11 @@ export async function toggleRead(request) {
 		return {
 			...repo,
 			issues: setArrayItemReadStatus(repo.issues, repo.url, request),
+			myPullRequests: setArrayItemReadStatus(
+				repo.myPullRequests || [],
+				repo.url,
+				request,
+			),
 			pullRequests: setArrayItemReadStatus(
 				repo.pullRequests,
 				repo.url,
@@ -89,11 +94,13 @@ export async function setItemInRepoAsReadBasedOnUrl(url) {
 	// Loop through all repos
 	return storedRepos?.map((repo) => {
 		const issues = findItemByURL(repo.issues, url);
+		const myPullRequests = findItemByURL(repo.myPullRequests || [], url);
 		const pullRequests = findItemByURL(repo.pullRequests, url);
 
 		return {
 			...repo,
 			issues,
+			myPullRequests,
 			pullRequests,
 		};
 	});
