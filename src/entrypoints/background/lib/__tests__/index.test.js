@@ -16,6 +16,7 @@ vi.mock('../../index.js');
 
 import { sendToAllTabs } from '../communication';
 vi.mock('../communication');
+import { quickStorage } from '../../settings/';
 
 import {
 	createRepoURL,
@@ -47,6 +48,21 @@ describe('init', () => {
 
 describe('toggleRead', () => {
 	it('should toggle read on a single item', async () => {
+		const repositories = await quickStorage.getRepositories();
+		repositories[0].myPullRequests = [
+			{
+				id: 'issueID',
+				read: false,
+				url: createRepoURL({ subPath: '/pull/22' }),
+			},
+			{
+				id: 'myPullID',
+				read: false,
+				url: createRepoURL({ subPath: '/pull/23' }),
+			},
+		];
+		await quickStorage.setRepositories(repositories);
+
 		// Toggle first issue to false
 		let request = { id: 'issueID', type: 'toggleRead' };
 		await toggleRead(request);
@@ -57,6 +73,9 @@ describe('toggleRead', () => {
 		expect(sendToAllTabs.mock.calls[0][0].repositories[0].issues[0].read).toBe(
 			true,
 		);
+		expect(
+			sendToAllTabs.mock.calls[0][0].repositories[0].myPullRequests[0].read,
+		).toBe(true);
 
 		// Toggle first issue to false
 		request = { id: 'issueID', type: 'toggleRead' };
@@ -64,6 +83,9 @@ describe('toggleRead', () => {
 		expect(sendToAllTabs.mock.calls[1][0].repositories[0].issues[0].read).toBe(
 			false,
 		);
+		expect(
+			sendToAllTabs.mock.calls[1][0].repositories[0].myPullRequests[0].read,
+		).toBe(false);
 
 		// Toggle first pull to true
 		request = { id: 'pullID', type: 'toggleRead' };
@@ -78,9 +100,35 @@ describe('toggleRead', () => {
 		expect(
 			sendToAllTabs.mock.calls[3][0].repositories[0].pullRequests[0].read,
 		).toBe(false);
+
+		request = { id: 'myPullID', type: 'toggleRead' };
+		await toggleRead(request);
+		expect(
+			sendToAllTabs.mock.calls[4][0].repositories[0].myPullRequests[1].read,
+		).toBe(true);
 	});
 
 	it('should toggle read on all items in a repo', async () => {
+		const repositories = await quickStorage.getRepositories();
+		repositories[0].myPullRequests = [
+			{
+				id: 'myPullID',
+				read: true,
+				url: createRepoURL({ subPath: '/pull/22' }),
+			},
+		];
+		repositories[1].myPullRequests = [
+			{
+				id: 'myPullID_2',
+				read: false,
+				url: createRepoURL({
+					repoName: 'github-sidebar_2',
+					subPath: '/pull/22',
+				}),
+			},
+		];
+		await quickStorage.setRepositories(repositories);
+
 		// Toggle first issue to false
 		let request = {
 			type: 'toggleRead',
@@ -93,6 +141,7 @@ describe('toggleRead', () => {
 		expect(repo1.issues[0].read).toBe(false);
 		expect(repo1.pullRequests[0].read).toBe(false);
 		expect(repo1.pullRequests[1].read).toBe(false);
+		expect(repo1.myPullRequests[0].read).toBe(false);
 
 		sendToAllTabs.mockClear();
 
@@ -110,13 +159,35 @@ describe('toggleRead', () => {
 		expect(repo1.issues[0].read).toBe(true);
 		expect(repo1.pullRequests[0].read).toBe(true);
 		expect(repo1.pullRequests[1].read).toBe(true);
+		expect(repo1.myPullRequests[0].read).toBe(true);
 
 		// Expext other repos read-status to not have been called
 		expect(repo2.pullRequests[0].read).toBe(false);
 		expect(repo2.pullRequests[1].read).toBe(false);
+		expect(repo2.myPullRequests[0].read).toBe(false);
 	});
 
 	it('should toggle read on all items regardless of repo', async () => {
+		const repositories = await quickStorage.getRepositories();
+		repositories[0].myPullRequests = [
+			{
+				id: 'myPullID',
+				read: false,
+				url: createRepoURL({ subPath: '/pull/22' }),
+			},
+		];
+		repositories[1].myPullRequests = [
+			{
+				id: 'myPullID_2',
+				read: false,
+				url: createRepoURL({
+					repoName: 'github-sidebar_2',
+					subPath: '/pull/22',
+				}),
+			},
+		];
+		await quickStorage.setRepositories(repositories);
+
 		// Toggle first issue to false
 		let request = {
 			type: 'toggleRead',
@@ -130,9 +201,11 @@ describe('toggleRead', () => {
 		expect(repo1.issues[0].read).toBe(true);
 		expect(repo1.pullRequests[0].read).toBe(true);
 		expect(repo1.pullRequests[1].read).toBe(true);
+		expect(repo1.myPullRequests[0].read).toBe(true);
 		expect(repo2.issues[0].read).toBe(true);
 		expect(repo2.pullRequests[0].read).toBe(true);
 		expect(repo2.pullRequests[1].read).toBe(true);
+		expect(repo2.myPullRequests[0].read).toBe(true);
 
 		sendToAllTabs.mockClear();
 
@@ -149,9 +222,11 @@ describe('toggleRead', () => {
 		expect(repo1.issues[0].read).toBe(false);
 		expect(repo1.pullRequests[0].read).toBe(false);
 		expect(repo1.pullRequests[1].read).toBe(false);
+		expect(repo1.myPullRequests[0].read).toBe(false);
 		expect(repo2.issues[0].read).toBe(false);
 		expect(repo2.pullRequests[0].read).toBe(false);
 		expect(repo2.pullRequests[1].read).toBe(false);
+		expect(repo2.myPullRequests[0].read).toBe(false);
 	});
 });
 
@@ -189,6 +264,23 @@ describe('setItemInRepoAsReadBasedOnUrl', () => {
 		// and just double check that these items still are good :)
 		expect(response[0].issues[0].read).toBe(false);
 		expect(response[0].pullRequests[0].read).toBe(false);
+	});
+
+	it('should set personal pull request as read based on incoming url', async () => {
+		const repositories = await quickStorage.getRepositories();
+		repositories[0].myPullRequests = [
+			{
+				id: 'myPullID',
+				read: false,
+				url: createRepoURL({ subPath: '/pull/22' }),
+			},
+		];
+		await quickStorage.setRepositories(repositories);
+
+		const itemToChange = repositories[0].myPullRequests[0];
+		const response = await setItemInRepoAsReadBasedOnUrl(itemToChange.url);
+
+		expect(response[0].myPullRequests[0].read).toBe(true);
 	});
 
 	it('should only set item as read if url contains github', async () => {

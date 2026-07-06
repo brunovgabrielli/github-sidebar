@@ -235,6 +235,44 @@ describe('repositories', () => {
 			queryAllByText((_, node) => node.textContent === 'Issues (4 of 100)')[0],
 		).toBeInTheDocument();
 	});
+
+	it('should render my pull requests section even when empty', () => {
+		const serverData = createQuickStorage();
+		serverData.repositories[0].myPullRequests = [];
+		serverData.repositories[0].collapsed = false;
+		setupDataFromBackground(serverData);
+
+		const { queryByText } = render();
+
+		expect(queryByText('My pull requests (0)')).toBeInTheDocument();
+	});
+
+	it('should render my pull requests above general pull requests', () => {
+		const serverData = createQuickStorage();
+		serverData.repositories[0].collapsed = false;
+		setupDataFromBackground(serverData);
+
+		const { container } = render();
+		const text = container.textContent;
+
+		expect(text.indexOf('My pull requests (1)')).toBeLessThan(
+			text.indexOf('Pull requests'),
+		);
+		expect(text).toContain('My Pull title 1');
+	});
+
+	it('should render pull requests without issues when filtered to pull requests', () => {
+		const serverData = createQuickStorage();
+		serverData.repositories[0].collapsed = false;
+		serverData.settings.listItemOfType = 'pullRequests';
+		setupDataFromBackground(serverData);
+
+		const { queryAllByText, queryByText } = render();
+
+		expect(queryAllByText('My pull requests (1)').length).toBeGreaterThan(0);
+		expect(queryAllByText('Pull requests (2)').length).toBeGreaterThan(0);
+		expect(queryByText('Issues')).not.toBeInTheDocument();
+	});
 });
 
 describe('single item', () => {

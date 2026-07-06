@@ -34,9 +34,7 @@ export default function SortRepos({ items, onRemoveRepo, onSortEnd }) {
 				>
 					<div className="content text-truncate">
 						<div className="top">
-							<h5 className="text-truncate">
-								{item.owner} / {item.name}
-							</h5>
+							<h5 className="text-truncate">{`${item.owner} / ${item.name}`}</h5>
 
 							<button
 								className="remove"
