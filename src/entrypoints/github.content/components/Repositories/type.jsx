@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Item from './item.jsx';
 import Icons from '../../images/svgs/icons';
 
 export default function Type({ settings, sendToBackend, repo, type }) {
+	const [collapsed, setCollapsed] = useState(false);
+
 	const itemData = {
 		issues: {
 			text: 'Issues',
@@ -41,11 +43,24 @@ export default function Type({ settings, sendToBackend, repo, type }) {
 	const item = itemData[type];
 	const url = `${repo.url}/${item.url}`;
 	const count = item.count();
+	const hasItems = repo[type] && repo[type].length > 0;
+	const handleToggleCollapsed = () => {
+		setCollapsed(!collapsed);
+	};
 
 	return (
-		<div className={type}>
+		<div className={`${type}${collapsed ? ' typeCollapsed' : ''}`}>
 			<div className="itemHeading">
-				<div className="grid-1" />
+				<div className="grid-1">
+					<button
+						type="button"
+						className="typeToggle"
+						aria-label={`Toggle ${item.text} list`}
+						onClick={handleToggleCollapsed}
+					>
+						<Icons icon="arrow" />
+					</button>
+				</div>
 
 				<div className="grid-1">
 					<Icons icon={item.icon} />
@@ -58,7 +73,7 @@ export default function Type({ settings, sendToBackend, repo, type }) {
 				</div>
 			</div>
 
-			{repo[type] && repo[type].length > 0 && (
+			{!collapsed && hasItems && (
 				<ul>
 					{repo[type].map((item) => {
 						return (

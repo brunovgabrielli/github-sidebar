@@ -36,21 +36,21 @@ describe('repoHasUnreadItems', () => {
 		expect(hasUnread).toBe(false);
 	});
 
-	it('should search through issues', () => {
+	it('should ignore unread issues', () => {
 		let repository = createInternalRepositoryData();
-		repository.pullRequests[0].read = true;
-		repository.pullRequests[1].read = true;
+		repository.myPullRequests[0].read = true;
 		let hasUnread = repoHasUnreadItems(repository);
 
-		expect(hasUnread).toBe(true);
+		expect(hasUnread).toBe(false);
 	});
 
-	it('should search through pullrequests', () => {
+	it('should ignore unread general pull requests', () => {
 		let repository = createInternalRepositoryData();
 		repository.issues[0].read = true;
+		repository.myPullRequests[0].read = true;
 		let hasUnread = repoHasUnreadItems(repository);
 
-		expect(hasUnread).toBe(true);
+		expect(hasUnread).toBe(false);
 	});
 
 	it('should return false if no elements are unread', () => {

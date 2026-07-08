@@ -3,12 +3,7 @@ export function hasUnreadItems(repositories) {
 }
 
 export function repoHasUnreadItems(repo) {
-	return (
-		repo.issues?.some((item) => !item.read) ||
-		repo.myPullRequests?.some((item) => !item.read) ||
-		repo.pullRequests?.some((item) => !item.read) ||
-		false
-	);
+	return repo.myPullRequests?.some((item) => !item.read) || false;
 }
 
 export function debounce(func, delay) {

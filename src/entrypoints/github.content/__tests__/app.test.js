@@ -223,17 +223,19 @@ describe('repositories', () => {
 		expect(sendMessage).not.toHaveBeenCalledTimes(1);
 	});
 
-	it('should show total number of items of a type', async () => {
+	it('should only show personal pull request counts in the repo header', async () => {
 		const serverData = createQuickStorage();
+		serverData.repositories = [serverData.repositories[0]];
 		serverData.repositories[0].totalItems.issues = 100;
+		serverData.repositories[0].collapsed = false;
 
 		setupDataFromBackground(serverData);
 
-		const { queryAllByText } = render();
+		const { queryAllByTitle, queryByText } = render();
 
-		expect(
-			queryAllByText((_, node) => node.textContent === 'Issues (4 of 100)')[0],
-		).toBeInTheDocument();
+		expect(queryAllByTitle('1 my pull requests')[0]).toBeInTheDocument();
+		expect(queryByText('Issues (4 of 100)')).not.toBeInTheDocument();
+		expect(queryByText('Pull requests (2)')).not.toBeInTheDocument();
 	});
 
 	it('should render my pull requests section even when empty', () => {
@@ -247,31 +249,52 @@ describe('repositories', () => {
 		expect(queryByText('My pull requests (0)')).toBeInTheDocument();
 	});
 
-	it('should render my pull requests above general pull requests', () => {
+	it('should render my pull requests without general issues or pull requests', () => {
 		const serverData = createQuickStorage();
+		serverData.repositories = [serverData.repositories[0]];
 		serverData.repositories[0].collapsed = false;
 		setupDataFromBackground(serverData);
 
-		const { container } = render();
-		const text = container.textContent;
+		const { queryByText } = render();
 
-		expect(text.indexOf('My pull requests (1)')).toBeLessThan(
-			text.indexOf('Pull requests'),
-		);
-		expect(text).toContain('My Pull title 1');
+		expect(queryByText('My pull requests (1)')).toBeInTheDocument();
+		expect(queryByText('My Pull title 1')).toBeInTheDocument();
+		expect(queryByText('Issues')).not.toBeInTheDocument();
+		expect(queryByText('Pull requests (2)')).not.toBeInTheDocument();
 	});
 
-	it('should render pull requests without issues when filtered to pull requests', () => {
+	it('should render only my pull requests regardless of the item type setting', () => {
 		const serverData = createQuickStorage();
+		serverData.repositories = [serverData.repositories[0]];
 		serverData.repositories[0].collapsed = false;
-		serverData.settings.listItemOfType = 'pullRequests';
+		serverData.settings.listItemOfType = 'issues';
 		setupDataFromBackground(serverData);
 
-		const { queryAllByText, queryByText } = render();
+		const { queryByText } = render();
 
-		expect(queryAllByText('My pull requests (1)').length).toBeGreaterThan(0);
-		expect(queryAllByText('Pull requests (2)').length).toBeGreaterThan(0);
+		expect(queryByText('My pull requests (1)')).toBeInTheDocument();
 		expect(queryByText('Issues')).not.toBeInTheDocument();
+		expect(queryByText('Pull requests (2)')).not.toBeInTheDocument();
+	});
+
+	it('should collapse and expand a repository item list', async () => {
+		const serverData = createQuickStorage();
+		serverData.repositories = [serverData.repositories[0]];
+		serverData.repositories[0].collapsed = false;
+		setupDataFromBackground(serverData);
+
+		const { getByLabelText, queryByTitle } = render();
+		const pullRequestTitle = serverData.repositories[0].myPullRequests[0].title;
+
+		expect(queryByTitle(pullRequestTitle)).toBeInTheDocument();
+
+		await userEvent.click(getByLabelText('Toggle My pull requests list'));
+
+		expect(queryByTitle(pullRequestTitle)).not.toBeInTheDocument();
+
+		await userEvent.click(getByLabelText('Toggle My pull requests list'));
+
+		expect(queryByTitle(pullRequestTitle)).toBeInTheDocument();
 	});
 });
 
@@ -290,7 +313,7 @@ describe('single item', () => {
 		expect(sendMessage).toHaveBeenCalledWith(
 			{
 				type: 'toggleRead',
-				id: serverData.repositories[0].issues[0].id,
+				id: serverData.repositories[0].myPullRequests[0].id,
 			},
 			null,
 		);
@@ -298,13 +321,15 @@ describe('single item', () => {
 
 	it('should only render a comment icon if there is any comments', async () => {
 		const serverData = createQuickStorage();
-		serverData.repositories[0].issues[0].comments = 0;
+		serverData.repositories[0].myPullRequests[0].comments = 0;
 		setupDataFromBackground(serverData);
 
 		const { getAllByTitle } = render();
 
 		sendMessage.mockClear();
-		const repo = getAllByTitle(serverData.repositories[0].issues[0].title)[0];
+		const repo = getAllByTitle(
+			serverData.repositories[0].myPullRequests[0].title,
+		)[0];
 		expect(repo).toMatchSnapshot();
 	});
 
@@ -314,7 +339,7 @@ describe('single item', () => {
 
 		let { queryAllByText } = render();
 
-		const issue = serverData.repositories[0].issues[0];
+		const issue = serverData.repositories[0].myPullRequests[0];
 		// The entire text-node is read, so the text we need to match is combined of all elements
 		const createdText = `${issue.title} ${issue.comments}By ${issue.author}, created`;
 		const updatedText = `${issue.title} ${issue.comments}By ${issue.author}, updated`;
@@ -335,7 +360,7 @@ describe('single item', () => {
 
 		let { queryAllByText } = render();
 
-		const issue = serverData.repositories[0].issues[0];
+		const issue = serverData.repositories[0].myPullRequests[0];
 		// The entire text-node is read, so the text we need to match is combined of all elements
 		const createdText = `${issue.title} ${issue.comments}By ${issue.author}, created`;
 		const updatedText = `${issue.title} ${issue.comments}By ${issue.author}, updated`;
