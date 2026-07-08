@@ -26,7 +26,7 @@ const calculateMaxHeight = (repo, repoHeight) => {
 };
 
 export default function Repository(props) {
-	const { repo, settings, sendToBackend } = props;
+	const { repo, sendToBackend } = props;
 
 	const [hover, setHover] = useState(false);
 
@@ -57,32 +57,15 @@ export default function Repository(props) {
 
 	const repoHeight = repoHeightRef?.current?.scrollHeight;
 
-	const availableItems =
-		settings.listItemOfType === 'all'
-			? ['issues', 'myPullRequests', 'pullRequests']
-			: settings.listItemOfType === 'pullRequests'
-				? ['myPullRequests', 'pullRequests']
-				: [settings.listItemOfType];
+	const availableItems = ['myPullRequests'];
 
 	const maxHeight = calculateMaxHeight(repo, repoHeight);
 
-	const hasActiveElements =
-		repo.totalItems.issues +
-			(repo.myPullRequests?.length || 0) +
-			repo.totalItems.pullRequests >
-		0;
+	const hasActiveElements = (repo.myPullRequests?.length || 0) > 0;
 
 	const items = availableItems.map((item) => {
-		const totalItems =
-			item === 'myPullRequests'
-				? repo.myPullRequests?.length || 0
-				: repo.totalItems[item];
-		const typeText =
-			item === 'pullRequests'
-				? 'pull requests'
-				: item === 'myPullRequests'
-					? 'my pull requests'
-					: item;
+		const totalItems = repo.myPullRequests?.length || 0;
+		const typeText = 'my pull requests';
 		return (
 			<span key={item} title={`${totalItems} ${typeText}`}>
 				{totalItems}
